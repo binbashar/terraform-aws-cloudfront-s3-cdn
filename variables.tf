@@ -344,7 +344,7 @@ variable "encryption_enabled" {
 
 variable "index_document" {
   type        = string
-  default     = ""
+  default     = "index.html"
   description = "Amazon S3 returns this index document when requests are made to the root domain or any of the subfolders"
 }
 
@@ -372,6 +372,7 @@ variable "ipv6_enabled" {
   description = "Set to true to enable an AAAA DNS record to be set as well as the A record"
 }
 
+<<<<<<< HEAD
 variable "create_acm_certificate" {
   type        = bool
   default     = false
@@ -382,4 +383,10 @@ variable "aws_profile" {
   type        = string
   default     = ""
   description = "An AWS profile with permissions on Certificate Manager"
+=======
+variable "website_enabled" {
+  type        = bool
+  default     = false
+  description = "Set to true to use an S3 static website as origin"
+>>>>>>> 2e2429180e06e92e51e550b4276ee0d3a3448f3d
 }
