@@ -13,6 +13,16 @@ locals {
       }
     ]
   }
+
+  regions_s3_website_use_dash = [
+    "us-east-1",
+    "us-west-1",
+    "us-west-2",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-northeast-1",
+    "sa-east-1"
+  ]
 }
 
 module "origin_label" {
@@ -84,6 +94,7 @@ data "template_file" "default" {
 }
 
 resource "aws_s3_bucket_policy" "default" {
+  count  = ! local.using_existing_origin || var.override_origin_bucket_policy ? 1 : 0
   bucket = local.bucket
   policy = data.template_file.default.rendered
 }
@@ -92,7 +103,7 @@ data "aws_region" "current" {
 }
 
 resource "aws_s3_bucket" "origin" {
-  count         = signum(length(var.origin_bucket)) == 1 ? 0 : 1
+  count         = local.using_existing_origin ? 0 : 1
   bucket        = module.origin_label.id
   acl           = "private"
   tags          = module.origin_label.tags
@@ -163,6 +174,8 @@ data "aws_s3_bucket" "selected" {
 }
 
 locals {
+  using_existing_origin = signum(length(var.origin_bucket)) == 1
+
   bucket = join("",
     compact(
       concat([var.origin_bucket], concat([""], aws_s3_bucket.origin.*.id))
@@ -170,8 +183,9 @@ locals {
   )
 
   bucket_domain_name = (var.use_regional_s3_endpoint || var.website_enabled) ? format(
-    var.website_enabled ? "%s.s3-website-%s.amazonaws.com" : "%s.s3-%s.amazonaws.com",
+    var.website_enabled ? "%s.s3-website%s%s.amazonaws.com" : "%s.s3%s%s.amazonaws.com",
     local.bucket,
+    (var.website_enabled && contains(local.regions_s3_website_use_dash, data.aws_s3_bucket.selected.region)) ? "-" : ".",
     data.aws_s3_bucket.selected.region,
   ) : format(var.bucket_domain_format, local.bucket)
 }
@@ -252,6 +266,43 @@ resource "aws_cloudfront_distribution" "default" {
         event_type   = lambda_function_association.value.event_type
         include_body = lookup(lambda_function_association.value, "include_body", null)
         lambda_arn   = lambda_function_association.value.lambda_arn
+      }
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = var.ordered_cache
+
+    content {
+      path_pattern = ordered_cache_behavior.value.path_pattern
+
+      allowed_methods  = ordered_cache_behavior.value.allowed_methods
+      cached_methods   = ordered_cache_behavior.value.cached_methods
+      target_origin_id = module.distribution_label.id
+      compress         = ordered_cache_behavior.value.compress
+      trusted_signers  = var.trusted_signers
+
+      forwarded_values {
+        query_string = ordered_cache_behavior.value.forward_query_string
+        headers      = ordered_cache_behavior.value.forward_header_values
+
+        cookies {
+          forward = ordered_cache_behavior.value.forward_cookies
+        }
+      }
+
+      viewer_protocol_policy = ordered_cache_behavior.value.viewer_protocol_policy
+      default_ttl            = ordered_cache_behavior.value.default_ttl
+      min_ttl                = ordered_cache_behavior.value.min_ttl
+      max_ttl                = ordered_cache_behavior.value.max_ttl
+
+      dynamic "lambda_function_association" {
+        for_each = ordered_cache_behavior.value.lambda_function_association
+        content {
+          event_type   = lambda_function_association.value.event_type
+          include_body = lookup(lambda_function_association.value, "include_body", null)
+          lambda_arn   = lambda_function_association.value.lambda_arn
+        }
       }
     }
   }

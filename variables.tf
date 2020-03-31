@@ -81,6 +81,12 @@ variable "additional_bucket_policy" {
   description = "Additional policies for the bucket. If included in the policies, the variables `$${bucket_name}`, `$${origin_path}` and `$${cloudfront_origin_access_identity_iam_arn}` will be substituted. It is also possible to override the default policy statements by providing statements with `S3GetObjectForCloudFront` and `S3ListBucketForCloudFront` sid."
 }
 
+variable "override_origin_bucket_policy" {
+  type        = bool
+  default     = true
+  description = "When using an existing origin bucket (through var.origin_bucket), setting this to 'false' will make it so the existing bucket policy will not be overriden"
+}
+
 variable "origin_bucket" {
   type        = string
   default     = ""
@@ -97,7 +103,7 @@ variable "origin_path" {
 variable "origin_force_destroy" {
   type        = bool
   default     = false
-  description = "Delete all objects from the bucket  so that the bucket can be destroyed without error (e.g. `true` or `false`)"
+  description = "Delete all objects from the bucket so that the bucket can be destroyed without error (e.g. `true` or `false`)"
 }
 
 variable "bucket_domain_format" {
@@ -199,7 +205,7 @@ variable "cors_max_age_seconds" {
 variable "forward_cookies" {
   type        = string
   default     = "none"
-  description = "Time in seconds that browser can cache the response for S3 bucket"
+  description = "Specifies whether you want CloudFront to forward all or no cookies to the origin. Can be 'all' or 'none'"
 }
 
 variable "forward_header_values" {
@@ -381,6 +387,38 @@ variable "aws_profile" {
   type        = string
   default     = ""
   description = "An AWS profile with permissions on Certificate Manager"
+
+variable "ordered_cache" {
+  type = list(object({
+    path_pattern = string
+
+    allowed_methods = list(string)
+    cached_methods  = list(string)
+    compress        = bool
+
+    viewer_protocol_policy = string
+    min_ttl                = number
+    default_ttl            = number
+    max_ttl                = number
+
+    forward_query_string  = bool
+    forward_header_values = list(string)
+    forward_cookies       = string
+
+    lambda_function_association = list(object({
+      event_type   = string
+      include_body = bool
+      lambda_arn   = string
+    }))
+  }))
+  default     = []
+  description = <<DESCRIPTION
+An ordered list of cache behaviors resource for this distribution. List from top to bottom in order of precedence. The topmost cache behavior will have precedence 0.
+The fields can be described by the other variables in this file. For example, the field 'lambda_function_association' in this object has
+a description in var.lambda_function_association variable earlier in this file. The only difference is that fields on this object are in ordered caches, whereas the rest
+of the vars in this file apply only to the default cache.
+DESCRIPTION
+}
 
 variable "website_enabled" {
   type        = bool
